@@ -243,11 +243,16 @@ def action_diff(req, diff_base, diff_target, obj):
         req.send_error(http.HTTPStatus.NOT_FOUND)
         return
 
+    commit_logs = req.kicad_repo.git_repo.get_commit_logs()
+    backup_versions = req.kicad_repo.backups_repo.get_versions()
+
     t = req.jinja_env.get_template('diffpcb.html')
     s = t.render(base_commit_id=diff_base,
                  target_commit_id=diff_target,
                  obj_list=obj_list,
-                 layer=obj).encode('utf-8')
+                 layer=obj,
+                 commit_logs=commit_logs,
+                 backup_versions=backup_versions).encode('utf-8')
     req.send_response(200)
     req.send_header('Content-Type', 'text/html')
     req.send_header('Content-Length', len(s))

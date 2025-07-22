@@ -61,3 +61,13 @@ class TestRepo(unittest.TestCase):
         zf.extract('display.kicad_sch', self.tmpdir)
         self.assertFalse(diff_files(dst_path, self.tmpdir / 'display.kicad_sch'))
 
+    def test_get_commit_logs(self):
+        logs = [(l.hash, l.refs, l.subject, l.body) for l in self.git_repo.get_commit_logs()]
+        self.assertEqual(logs, [
+            (self.second_commit.hexsha, 'HEAD -> master', 'second commit', ''),
+            (self.initial_commit.hexsha, '', 'initial commit', ''),
+        ])
+
+    def test_get_versions(self):
+        self.assertEqual(self.backups_repo.get_versions(),
+                         ['2025-07-19_113432', '2025-07-19_112922', '2025-07-19_112346'])
