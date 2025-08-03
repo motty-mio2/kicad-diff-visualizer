@@ -87,7 +87,7 @@ def replace_gstyle_all(svg_content, replace_map):
         for key, value in replace_map.items():
             if key not in style_dict:
                 continue
-            if key == 'fill' and style_dict['fill'] == 'none':
+            if (key in ['fill', 'stroke']) and style_dict[key] == 'none':
                 continue
             style_dict[key] = value
 
