@@ -58,13 +58,11 @@ button.show-option {
     'base': {
         'title': 'Base (old commit)',
         'commit_id': base_commit_id,
-        'show_options_handler': 'showBaseOptions()',
         'select_option_handler': 'selectBaseOption(this)',
     },
     'target': {
         'title': 'Target (new commit)',
         'commit_id': target_commit_id,
-        'show_options_handler': 'showTargetOptions()',
         'select_option_handler': 'selectTargetOption(this)',
     },
 } %}
@@ -125,6 +123,11 @@ button.show-option {
 
     <input type="radio" name="imagesel" id="show-both" value="show-both" checked />
     <label for="show-both">Both</label>
+
+    {% if mode == 'pcb' %}
+    <input type="checkbox" id="fit-board" onchange="jumpToSelectedLayer()" {% if fit_board %}checked{% endif %} />
+    <label for="fit-board">Fit</label>
+    {% endif %}
   </fieldset>
 
   <fieldset id="vm-set" disabled>
@@ -209,21 +212,26 @@ window.addEventListener("wheel", (e) => {
 }, { passive: false });
 
 const layer_select = document.getElementById("layer-select");
+const fit_board = document.getElementById("fit-board");
 
 document.getElementById("layer-select").addEventListener("change", (event) => {
-  window.location.href = `./${layer_select.value}`;
+  jumpToSelectedLayer();
 });
 
 
 const base_commit = document.getElementById("base-commit");
 const target_commit = document.getElementById("target-commit");
 
-document.getElementById("change-commit-button").addEventListener("click", (event) => {
+function jumpToSelectedLayer() {
+  const query = `?fit_board=${fit_board ? fit_board.checked : false}`;
   const selected_layer = layer_select.value;
-  console.log("selected layer = ", selected_layer);
   const base_commit_id = base_commit.value;
   const target_commit_id = target_commit.value;
-  window.location.href = `/diff/${base_commit_id}/${target_commit_id}/${selected_layer}`;
+  window.location.href = `/diff/${base_commit_id}/${target_commit_id}/${selected_layer}${query}`;
+}
+
+document.getElementById("change-commit-button").addEventListener("click", (event) => {
+  jumpToSelectedLayer();
 });
 
 const base_options = document.getElementById("base-options");
@@ -311,7 +319,8 @@ function onload_pcb_image(svg_text) {
 
 }
 
-const pcb_image_path = "/image/{{base_commit_id}}/{{target_commit_id}}/{{layer}}.svg";
+const pcb_image_path = (`/image/{{base_commit_id}}/{{target_commit_id}}/{{layer}}.svg` +
+  `?fit_board=${fit_board ? fit_board.checked : false}`);
 fetch(pcb_image_path)
   .then(res => res.text())
   .then(svg_text => onload_pcb_image(svg_text));

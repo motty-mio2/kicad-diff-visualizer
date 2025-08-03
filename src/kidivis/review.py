@@ -46,7 +46,7 @@ def using_kicadwin_from_wsl(kicad_cli):
     '''
     return Path('/usr/bin/wslpath').exists() and kicad_cli.endswith('.exe')
 
-def export_svgs(dst_dir_path, mode, file_path, kicad_cli, layers):
+def export_svgs(dst_dir_path, mode, file_path, kicad_cli, layers, fit_board):
     dst_dir_path_for_cmd = dst_dir_path
     file_path_for_cmd = file_path
     if using_kicadwin_from_wsl(kicad_cli):
@@ -59,8 +59,9 @@ def export_svgs(dst_dir_path, mode, file_path, kicad_cli, layers):
     export_cmd = [kicad_cli, mode, 'export', 'svg',
                   '--black-and-white', '--output', str(dst_dir_path_for_cmd)]
     if mode == 'pcb':
-        export_cmd.extend(['--fit-page-to-board', '--mode-multi',
-                           '--layers', ','.join(layers)])
+        if fit_board:
+            export_cmd.append('--fit-page-to-board')
+        export_cmd.extend(['--mode-multi', '--layers', ','.join(layers)])
     elif mode == 'sch':
         export_cmd.extend(['--no-background-color'])
 
@@ -129,17 +130,25 @@ def action_image(req, diff_base, diff_target, filename):
                                         sheet.file,
                                         target_dir / sheet.file)
 
+    base_svg_dir = base_dir / mode
+    target_svg_dir = target_dir / mode
     if mode == 'pcb':
-        base_svg_path = base_dir / mode / make_pcbsvg_filename(file_path.name, obj)
-        target_svg_path = target_dir / mode / make_pcbsvg_filename(file_path.name, obj)
+        fb = 'fit_board' if req.fit_board else 'nofit_board'
+        base_svg_dir = base_svg_dir / fb
+        target_svg_dir = target_svg_dir / fb
+        base_svg_path = base_svg_dir / make_pcbsvg_filename(file_path.name, obj)
+        target_svg_path = target_svg_dir / make_pcbsvg_filename(file_path.name, obj)
     elif mode == 'sch':
-        base_svg_path = base_dir / mode / (obj + '.svg')
-        target_svg_path = target_dir / mode / (obj + '.svg')
+        base_svg_path = base_svg_dir / (obj + '.svg')
+        target_svg_path = target_svg_dir / (obj + '.svg')
+
+    def export_svgs_(d, f):
+        export_svgs(d, mode, f, req.kicad_cli, req.layers, req.fit_board)
 
     if not base_svg_path.exists():
-        export_svgs(base_dir / mode, mode, base_file_path, req.kicad_cli, req.layers)
+        export_svgs_(base_svg_dir, base_file_path)
     if not target_svg_path.exists():
-        export_svgs(target_dir / mode, mode, target_file_path, req.kicad_cli, req.layers)
+        export_svgs_(target_svg_dir, target_file_path)
 
     with open(base_svg_path) as f:
         base_svg = f.read()
@@ -243,6 +252,8 @@ def action_diff(req, diff_base, diff_target, obj):
         req.send_error(http.HTTPStatus.NOT_FOUND)
         return
 
+    mode = 'pcb' if obj in req.layers else 'sch'
+
     commit_logs = req.kicad_repo.git_repo.get_commit_logs()
     backup_versions = req.kicad_repo.backups_repo.get_versions()
 
@@ -252,7 +263,9 @@ def action_diff(req, diff_base, diff_target, obj):
                  obj_list=obj_list,
                  layer=obj,
                  commit_logs=commit_logs,
-                 backup_versions=backup_versions).encode('utf-8')
+                 backup_versions=backup_versions,
+                 fit_board=req.fit_board,
+                 mode=mode).encode('utf-8')
     req.send_response(200)
     req.send_header('Content-Type', 'text/html')
     req.send_header('Content-Length', len(s))
@@ -286,19 +299,27 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         logger.info('do_GET path=%s traceid=%s', self.path, self.traceid)
         try:
-            url_parts = urllib.parse.urlparse(self.path)
+            self.url_parts = urllib.parse.urlparse(self.path)
+            self.url_query = urllib.parse.parse_qs(self.url_parts.query)
+            fit_board = self.url_query.get('fit_board')
+            if fit_board is None or len(fit_board) == 0:
+                self.fit_board = False
+            else:
+                self.fit_board = fit_board[0] == 'true'
 
-            if url_parts.path == '/':
+            logger.info(f"{self.url_query=}")
+
+            if self.url_parts.path == '/':
                 self.send_response(http.HTTPStatus.MOVED_PERMANENTLY)
                 self.send_header('Location', '/diff/HEAD/WORK/F.Cu')
                 self.end_headers()
                 return
 
-            if not url_parts.path.startswith('/'):
+            if not self.url_parts.path.startswith('/'):
                 self.send_error(http.HTTPStatus.NOT_FOUND)
                 return
 
-            path_parts = [urllib.parse.unquote(p) for p in url_parts.path[1:].split('/')]
+            path_parts = [urllib.parse.unquote(p) for p in self.url_parts.path[1:].split('/')]
             if len(path_parts) <= 1:
                 self.send_error(http.HTTPStatus.NOT_FOUND)
                 return
