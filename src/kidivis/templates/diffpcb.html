@@ -115,14 +115,14 @@ button.show-option {
       {% endfor %}
     </select>
 
-    <input type="radio" name="imagesel" id="show-bottom" value="show-bottom" />
-    <label for="show-bottom">Bottom</label>
-
-    <input type="radio" name="imagesel" id="show-top" value="show-top" />
-    <label for="show-top">Top</label>
-
     <input type="radio" name="imagesel" id="show-both" value="show-both" checked />
     <label for="show-both">Both</label>
+
+    <input type="radio" name="imagesel" id="show-base" value="show-base" />
+    <label for="show-base">Base</label>
+
+    <input type="radio" name="imagesel" id="show-target" value="show-target" />
+    <label for="show-target">Target</label>
 
     {% if mode == 'pcb' %}
     <input type="checkbox" id="fit-board" onchange="jumpToSelectedLayer()" {% if fit_board %}checked{% endif %} />
@@ -275,13 +275,13 @@ function onload_pcb_image(svg_text) {
   const bottom_g = document.getElementById("bottom-g");
   const top_g = document.getElementById("top-g");
 
-  document.getElementById("show-bottom").addEventListener("change", (event) => {
+  document.getElementById("show-base").addEventListener("change", (event) => {
     if (event.srcElement.checked) {
       bottom_g.style.opacity = 1;
       top_g.style.opacity = 0;
     }
   });
-  document.getElementById("show-top").addEventListener("change", (event) => {
+  document.getElementById("show-target").addEventListener("change", (event) => {
     if (event.srcElement.checked) {
       bottom_g.style.opacity = 0;
       top_g.style.opacity = 1;
