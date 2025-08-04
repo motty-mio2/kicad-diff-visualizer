@@ -47,6 +47,10 @@ button.show-option {
   margin-right: 1em;
 }
 
+#pcb-image-div {
+  overflow: hidden;  // 枠からはみ出た部分を表示しない
+}
+
 </style>
 </head>
 <body>
@@ -131,8 +135,7 @@ button.show-option {
   </fieldset>
 
   <fieldset id="vm-set" disabled>
-    <label for="svg-zoom">Scale: </label>
-    <input type="range" id="svg-zoom" min="0.1" max="5" step="0.1" value="1">
+    Scale:
     <span id="svg-zoom-pct">100</span>
     <span>%</span>
 
@@ -161,55 +164,34 @@ button.show-option {
 var original_width = null;
 var original_height = null;
 
-const svg_zoom = document.getElementById("svg-zoom");
-var current_zoom = parseFloat(svg_zoom.value);
+let current_zoom = 1;
 
-function scaleSVG(new_zoom) {
+let scale = 1;
+let trans_x = 0;
+let trans_y = 0;
+
+function zoomImage(new_zoom, origin_x, origin_y) {
+  // 拡大縮小の範囲を制限する
+  const zoom = Math.min(Math.max(new_zoom, 0.1), 5);
+
   // 画像は遅延読み込みなので、ここで取得
   const overlayed_svg = document.getElementById("overlayed_svg");
 
-  const scale = Math.pow(2, new_zoom - 1);
-  console.log("scaleSVG", `current_zoom=${current_zoom} new_zoom=${new_zoom} scale=${scale}`);
-  const width = original_width * scale;
-  const height = original_height * scale;
-  console.log("setting new size:", width, height);
-  overlayed_svg.setAttribute("width", width);
-  overlayed_svg.setAttribute("height", height);
+  const prev_scale = scale;
+  scale = Math.pow(2, zoom - 1);
+  console.log("zoomImage", `current_zoom=${current_zoom} zoom=${zoom} scale=${scale}`);
+
+
+  trans_x -= (origin_x / prev_scale) * (scale - prev_scale);
+  trans_y -= (origin_y / prev_scale) * (scale - prev_scale);
+  console.log("trans =", trans_x, trans_y);
+
+  overlayed_svg.style.transform = `translate(${trans_x}px, ${trans_y}px) scale(${scale})`;
+
   document.getElementById("svg-zoom-pct").textContent = (scale * 100).toFixed(0);
 
-  current_zoom = new_zoom;
-  svg_zoom.value = current_zoom;
+  current_zoom = zoom;
 }
-
-svg_zoom.addEventListener("input", (event) => {
-  console.log(event);
-  const new_zoom = svg_zoom.value;
-  scaleSVG(new_zoom);
-});
-
-window.addEventListener("wheel", (e) => {
-  // マウススクロールで倍率変更
-  if (e.ctrlKey) {
-    e.preventDefault();  // ページ全体のズームを防止
-    console.log("deltaY", e.deltaY);
-
-    var delta_y = e.deltaY;
-    switch (e.deltaMode) {
-      case 0: // px
-        delta_y /= 100;
-        break;
-      case 1: // line
-        delta_y /= 3;
-        break;
-      case 2: // page
-        break;
-    }
-
-    const zoom_delta = (-delta_y) * 0.2;
-    console.log("zoom_delta", zoom_delta);
-    scaleSVG(current_zoom + zoom_delta);
-  }
-}, { passive: false });
 
 const layer_select = document.getElementById("layer-select");
 const fit_board = document.getElementById("fit-board");
@@ -317,6 +299,37 @@ function onload_pcb_image(svg_text) {
     document.getElementById(id).removeAttribute("disabled");
   });
 
+  overlayed_svg.style.transformOrigin = "0 0";
+
+  overlayed_svg.addEventListener('wheel', (event) => {
+    if (event.ctrlKey) {
+      event.preventDefault();  // ページ全体のズームを防止
+
+      // マウス座標から画像内座標へ変換
+      const img_rect = overlayed_svg.getBoundingClientRect();
+      const origin_x = event.clientX - img_rect.left;
+      const origin_y = event.clientY - img_rect.top;
+
+      console.log("deltaY", event.deltaY);
+
+      var delta_y = event.deltaY;
+      switch (event.deltaMode) {
+        case 0: // px
+          delta_y /= 100;
+          break;
+        case 1: // line
+          delta_y /= 3;
+          break;
+        case 2: // page
+          break;
+      }
+
+      const zoom_delta = (-delta_y) * 0.2;
+      console.log("zoom_delta:", zoom_delta);
+
+      zoomImage(current_zoom + zoom_delta, origin_x, origin_y);
+    }
+  });
 }
 
 const pcb_image_path = (`/image/{{base_commit_id}}/{{target_commit_id}}/{{layer}}.svg` +
