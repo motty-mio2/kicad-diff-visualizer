@@ -170,6 +170,10 @@ let scale = 1;
 let trans_x = 0;
 let trans_y = 0;
 
+function applyTransform(overlayed_svg) {
+  overlayed_svg.style.transform = `translate(${trans_x}px, ${trans_y}px) scale(${scale})`;
+}
+
 function zoomImage(new_zoom, origin_x, origin_y) {
   // 拡大縮小の範囲を制限する
   const zoom = Math.min(Math.max(new_zoom, 0.1), 5);
@@ -186,7 +190,7 @@ function zoomImage(new_zoom, origin_x, origin_y) {
   trans_y -= (origin_y / prev_scale) * (scale - prev_scale);
   console.log("trans =", trans_x, trans_y);
 
-  overlayed_svg.style.transform = `translate(${trans_x}px, ${trans_y}px) scale(${scale})`;
+  applyTransform(overlayed_svg);
 
   document.getElementById("svg-zoom-pct").textContent = (scale * 100).toFixed(0);
 
@@ -329,6 +333,26 @@ function onload_pcb_image(svg_text) {
 
       zoomImage(current_zoom + zoom_delta, origin_x, origin_y);
     }
+  });
+
+  let is_dragging = false;
+  overlayed_svg.addEventListener("mousedown", (event) => {
+    is_dragging = true;
+    overlayed_svg.style.cursor = "grabbing";
+  });
+  overlayed_svg.addEventListener("mouseup", (event) => {
+    is_dragging = false;
+    overlayed_svg.style.cursor = "default";
+  });
+
+  overlayed_svg.addEventListener("mousemove", (event) => {
+    if (!is_dragging) {
+      return;
+    }
+
+    trans_x += event.movementX;
+    trans_y += event.movementY;
+    applyTransform(overlayed_svg);
   });
 }
 
