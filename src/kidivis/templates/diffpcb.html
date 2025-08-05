@@ -49,6 +49,15 @@ button.show-option {
 
 #pcb-image-div {
   overflow: hidden;  // 枠からはみ出た部分を表示しない
+  box-sizing: border-box;  // スクロールバー出現防止
+  margin-top: 2px;
+  border: 1px solid #2ea44f;
+}
+
+#img-load-progress {
+  position: absolute;
+  margin-top: 100px;
+  left: 10%;
 }
 
 </style>
@@ -139,6 +148,8 @@ button.show-option {
     <span id="svg-zoom-pct">100</span>
     <span>%</span>
 
+    <button id="reset-zoom" onclick="resetZoom()">Reset</button>
+
     <legend>Visualization mode:</legend>
 
     <input type="radio" name="visualmode" id="vm-diff" value="vm-diff" checked />
@@ -153,10 +164,11 @@ button.show-option {
 
 </div>
 
+<progress id="img-load-progress" aria-label="loading an SVG image...">
+</progress>
+
 <div id="pcb-image-div" aria-busy="true" aria-describedby="img-load-progress">
 </div>
-
-<progress id="img-load-progress" aria-label="loading an SVG image..." />
 
 <script>
 
@@ -186,15 +198,25 @@ function zoomImage(new_zoom, origin_x, origin_y) {
 
   const prev_scale = scale;
   scale = zoomToScale(zoom);
-  console.log("zoomImage", `current_zoom=${current_zoom} zoom=${zoom} scale=${scale}`);
 
   trans_x -= (origin_x / prev_scale) * (scale - prev_scale);
   trans_y -= (origin_y / prev_scale) * (scale - prev_scale);
-  console.log("trans =", trans_x, trans_y);
 
   applyTransform(overlayed_svg);
 
   current_zoom = zoom;
+}
+
+function resetZoom() {
+  const overlayed_svg = document.getElementById("overlayed_svg");
+  if (!overlayed_svg) {
+    return;
+  }
+  current_zoom = 1;
+  scale = 1;
+  trans_x = 0;
+  trans_y = 0;
+  applyTransform(overlayed_svg);
 }
 
 const layer_select = document.getElementById("layer-select");
@@ -258,10 +280,46 @@ function selectTargetOption(el) {
   target_options.close();
 }
 
+let last_wheel_time = 0;
+let wheel_buffer = [];
+
+function detect_device_type(mouse_event) {
+  const delta_time = mouse_event.timeStamp - last_wheel_time;
+  last_wheel_time = mouse_event.timeStamp;
+
+  wheel_buffer.push({ deltaY: mouse_event.deltaY, delta_time: delta_time });
+  if (wheel_buffer.length > 10) {
+    wheel_buffer.shift();
+  }
+
+  const is_fast_wheel = wheel_buffer.filter(
+    elem => elem.delta_time < 30 && Math.abs(elem.deltaY) < 15
+  ).length > 5;
+
+  if (is_fast_wheel) {
+    return "trackpad";
+  } else {
+    return "mouse";
+  }
+}
+
+const pcb_image_div = document.getElementById("pcb-image-div");
+
+function adjust_pcb_image_height() {
+  const pcb_image_top = pcb_image_div.getBoundingClientRect().top;
+  const pcb_image_height = window.innerHeight - pcb_image_top - 10;
+
+  pcb_image_div.style.width = "100%";
+  pcb_image_div.style.height = `${pcb_image_height}px`;
+}
+
+window.addEventListener("resize", adjust_pcb_image_height);
+window.addEventListener("load", adjust_pcb_image_height);
+
 function onload_pcb_image(svg_text) {
   console.log("pcb image loaded");
-  document.getElementById("pcb-image-div").innerHTML = svg_text;
-  document.getElementById("pcb-image-div").setAttribute("aria-busy", "false");
+  pcb_image_div.innerHTML = svg_text;
+  pcb_image_div.setAttribute("aria-busy", "false");
   document.getElementById("img-load-progress").style.display = "none";
 
   const overlayed_svg = document.getElementById("overlayed_svg");
@@ -318,33 +376,37 @@ function onload_pcb_image(svg_text) {
   console.log("initial transform applied", {{ current_zoom }}, "trans", {{ trans_x }}, {{ trans_y }});
 
   overlayed_svg.addEventListener('wheel', (event) => {
-    if (event.ctrlKey) {
-      event.preventDefault();  // ページ全体のズームを防止
+    event.preventDefault();  // ページ全体のズームを防止
 
-      // マウス座標から画像内座標へ変換
-      const img_rect = overlayed_svg.getBoundingClientRect();
-      const origin_x = event.clientX - img_rect.left;
-      const origin_y = event.clientY - img_rect.top;
+    // マウス座標から画像内座標へ変換
+    const img_rect = overlayed_svg.getBoundingClientRect();
+    const origin_x = event.clientX - img_rect.left;
+    const origin_y = event.clientY - img_rect.top;
 
-      console.log("deltaY", event.deltaY);
-
-      var delta_y = event.deltaY;
-      switch (event.deltaMode) {
-        case 0: // px
-          delta_y /= 100;
-          break;
-        case 1: // line
-          delta_y /= 3;
-          break;
-        case 2: // page
-          break;
-      }
-
-      const zoom_delta = (-delta_y) * 0.2;
-      console.log("zoom_delta:", zoom_delta);
-
-      zoomImage(current_zoom + zoom_delta, origin_x, origin_y);
+    let delta_y = event.deltaY;
+    let device_type = detect_device_type(event);
+    console.log("device type", device_type);
+    switch (event.deltaMode) {
+      case 0: // px
+        switch (device_type) {
+          case "trackpad":
+            delta_y /= 3;
+            break;
+          default:
+            delta_y /= 30;
+            break;
+        }
+      case 1: // line
+        delta_y /= 3;
+        break;
+      case 2: // page
+        break;
     }
+
+    const zoom_delta = (-delta_y) * 0.2;
+    console.log("zoom_delta:", zoom_delta);
+
+    zoomImage(current_zoom + zoom_delta, origin_x, origin_y);
   });
 
   let is_dragging = false;
