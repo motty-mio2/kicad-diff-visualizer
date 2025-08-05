@@ -161,38 +161,38 @@ button.show-option {
 <script>
 
 
-var original_width = null;
-var original_height = null;
+function zoomToScale(zoom) {
+  // 拡大縮小の範囲を制限する
+  const zoom_limited = Math.min(Math.max(zoom, 0.1), 5);
+  return Math.pow(2, zoom_limited - 1);
+}
 
-let current_zoom = 1;
+let current_zoom = {{ current_zoom }};
 
-let scale = 1;
-let trans_x = 0;
-let trans_y = 0;
+let scale = zoomToScale(current_zoom);
+let trans_x = {{ trans_x }};
+let trans_y = {{ trans_y }};
 
 function applyTransform(overlayed_svg) {
   overlayed_svg.style.transform = `translate(${trans_x}px, ${trans_y}px) scale(${scale})`;
+  document.getElementById("svg-zoom-pct").textContent = (scale * 100).toFixed(0);
 }
 
 function zoomImage(new_zoom, origin_x, origin_y) {
-  // 拡大縮小の範囲を制限する
   const zoom = Math.min(Math.max(new_zoom, 0.1), 5);
 
   // 画像は遅延読み込みなので、ここで取得
   const overlayed_svg = document.getElementById("overlayed_svg");
 
   const prev_scale = scale;
-  scale = Math.pow(2, zoom - 1);
+  scale = zoomToScale(zoom);
   console.log("zoomImage", `current_zoom=${current_zoom} zoom=${zoom} scale=${scale}`);
-
 
   trans_x -= (origin_x / prev_scale) * (scale - prev_scale);
   trans_y -= (origin_y / prev_scale) * (scale - prev_scale);
   console.log("trans =", trans_x, trans_y);
 
   applyTransform(overlayed_svg);
-
-  document.getElementById("svg-zoom-pct").textContent = (scale * 100).toFixed(0);
 
   current_zoom = zoom;
 }
@@ -208,8 +208,20 @@ document.getElementById("layer-select").addEventListener("change", (event) => {
 const base_commit = document.getElementById("base-commit");
 const target_commit = document.getElementById("target-commit");
 
+function jsonToQueryString(json) {
+  const qs = Object.keys(json)
+    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(json[key])}`)
+    .join("&");
+  return qs ? "?" + qs : "";
+}
+
 function jumpToSelectedLayer() {
-  const query = `?fit_board=${fit_board ? fit_board.checked : false}`;
+  const query = jsonToQueryString({
+    fit_board: fit_board ? fit_board.checked : false,
+    trans_x: trans_x,
+    trans_y: trans_y,
+    zoom: current_zoom
+  });
   const selected_layer = layer_select.value;
   const base_commit_id = base_commit.value;
   const target_commit_id = target_commit.value;
@@ -254,9 +266,6 @@ function onload_pcb_image(svg_text) {
 
   const overlayed_svg = document.getElementById("overlayed_svg");
   console.log(overlayed_svg);
-  original_width = overlayed_svg.width.baseVal.value;
-  original_height = overlayed_svg.height.baseVal.value;
-  console.log("original size: ", original_width, original_height);
 
   const bottom_g = document.getElementById("bottom-g");
   const top_g = document.getElementById("top-g");
@@ -304,6 +313,9 @@ function onload_pcb_image(svg_text) {
   });
 
   overlayed_svg.style.transformOrigin = "0 0";
+
+  applyTransform(overlayed_svg);
+  console.log("initial transform applied", {{ current_zoom }}, "trans", {{ trans_x }}, {{ trans_y }});
 
   overlayed_svg.addEventListener('wheel', (event) => {
     if (event.ctrlKey) {

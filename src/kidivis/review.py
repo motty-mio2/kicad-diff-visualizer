@@ -239,6 +239,19 @@ def get_sch_subsheets_recursive(sch_path):
 
     return sheets
 
+def try_parse_float(value, default):
+    try:
+        return float(value)
+    except:
+        return default
+
+def get_query_first_arg(url_query, key):
+    val = url_query.get(key)
+    if val is None or len(val) == 0:
+        return None
+    else:
+        return val[0]
+
 def action_diff(req, diff_base, diff_target, obj):
     obj_list = req.layers
 
@@ -265,7 +278,11 @@ def action_diff(req, diff_base, diff_target, obj):
                  commit_logs=commit_logs,
                  backup_versions=backup_versions,
                  fit_board=req.fit_board,
-                 mode=mode).encode('utf-8')
+                 mode=mode,
+                 current_zoom=try_parse_float(get_query_first_arg(req.url_query, 'zoom'), 1),
+                 trans_x=try_parse_float(get_query_first_arg(req.url_query, 'trans_x'), 0),
+                 trans_y=try_parse_float(get_query_first_arg(req.url_query, 'trans_y'), 0)
+                 ).encode('utf-8')
     req.send_response(200)
     req.send_header('Content-Type', 'text/html')
     req.send_header('Content-Length', len(s))
@@ -301,11 +318,7 @@ class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
         try:
             self.url_parts = urllib.parse.urlparse(self.path)
             self.url_query = urllib.parse.parse_qs(self.url_parts.query)
-            fit_board = self.url_query.get('fit_board')
-            if fit_board is None or len(fit_board) == 0:
-                self.fit_board = False
-            else:
-                self.fit_board = fit_board[0] == 'true'
+            self.fit_board = get_query_first_arg(self.url_query, 'fit_board') == 'true'
 
             logger.info(f"{self.url_query=}")
 
