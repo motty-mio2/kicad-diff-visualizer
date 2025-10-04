@@ -17,7 +17,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["kidivis"]
+packages = ["src/kidivis"]
 
 [project.scripts]
-kidivis = "kidivis.__main__:main"
+kidivis = "kidivis.review:main"
